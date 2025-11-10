@@ -40,26 +40,46 @@ class AdminConferenceModel(admin.ModelAdmin):
     #INLINES 
     inlines=[SubmissionInline]
 
-@admin.action(description="marquer les soumissions comme payés")
-def mark_as_payed(modeladmin,req,queryset):
-    queryset.update(payed=True)
-@admin.action
-def mark_as_accepted(m,rq,q):
-    q.update(status="accepted") 
-
-
 @admin.register(Submission)
-class SubmissionAdmin(admin.ModelAdmin):
-    list_display =("title", "status", "payed","submission_date")
-    fieldsets =(
-        ("Information general", {
-            "fields":("title","abstract","keywords")
-        }),
-        ("document", {
-            "fields":("paper","user","conference")
-        }),
-        ("Status", {
-            "fields":("status","payed")
-        })
+class AdminSubmissionModel(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "status",
+        "user",
+        "conference",
+        "submission_date",
+        "payed",
+        "short_abstract",
     )
-    actions =[mark_as_payed,mark_as_accepted]
+    list_filter = ("status", "payed", "conference", "submission_date")
+    search_fields = ("title", "keywords", "user__username")
+    list_editable = ("status", "payed")
+    fieldsets = (
+        ("Infos générales", {
+            "fields": ("submission_id", "title", "abstarct", "keywords")
+        }),
+        ("Fichier et conférence", {
+            "fields": ("paper", "conference")
+        }),
+        ("Suivi", {
+            "fields": ("status", "payed", "submission_date", "user")
+        }),
+    )
+    readonly_fields = ("submission_id", "submission_date")
+
+    def short_abstract(self, obj):
+        return (obj.abstarct[:50] + "...") if len(obj.abstarct) > 50 else obj.abstarct
+    short_abstract.short_description = "Résumé court"
+    # Action pour marquer plusieurs soumissions comme payées
+    def mark_as_payed(self, request, queryset):
+      updated = queryset.update(payed=True)
+      self.message_user(request, f"{updated} soumission(s) marquée(s) comme payée(s).")
+    mark_as_payed.short_description = "Marquer les soumissions sélectionnées comme payées"
+
+
+    def accept_submissions(self, request, queryset):
+        updated = queryset.update(status='accepted')
+        self.message_user(request, f"{updated} soumission(s) acceptée(s).")
+    accept_submissions.short_description = "Accepter les soumissions sélectionnées"
+    
+    actions = [mark_as_payed, accept_submissions]

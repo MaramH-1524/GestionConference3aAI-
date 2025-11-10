@@ -57,7 +57,7 @@ ROOT_URLCONF = "GestionConference3AI.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [ BASE_DIR / "GestionConference3AI/Templates" ],
+        "DIRS": [],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
