@@ -1,39 +1,6 @@
-# Django
-*.pyc
-__pycache__/
-*.pyo
-*.pyd
-*.log
-local_settings.py
-
-# Base de données
-db.sqlite3
-*.sqlite3
-
-# Environnements virtuels
-venv/
-env/
-ENV/
-.env
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Fichiers système
-.DS_Store
-Thumbs.db
-
-# Fichiers sensibles
-*.env
-.env.local
-*.key
-*.secret
-
-# Dossier papers (fichiers uploadés)
-papers/
+./venv/
+./GestionConference3IA2/db.sqlite3
+./GestionConference3IA2/papers/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
