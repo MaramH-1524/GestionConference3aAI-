@@ -12,6 +12,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 
+# Configuration Simple JWT
+from datetime import timedelta
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -37,9 +40,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'rest_framework_simplejwt', 
     'UserApp',
     'ConferenceApp',
     'SessionApp',
+    'SessionAppApi',
+    'securityConfigApp'
 ]
 
 MIDDLEWARE = [
@@ -129,3 +136,27 @@ AUTH_USER_MODEL="UserApp.User"
 LOGIN_REDIRECT_URL="liste_conferences"
 LOGOUT_REDIRECT_URL="login"
 LOGIN_URL="login"
+
+# ... vos autres configurations Django ...
+
+# Configuration REST Framework
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+
+SIMPLE_JWT = {
+    'USER_ID_FIELD': 'user_id',
+    'USER_ID_CLAIM': 'user_id',
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'ALGORITHM': 'HS256',
+    # clé secrète (utilise la même que Django SECRET_KEY ou une autre forte)
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+}

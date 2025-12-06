@@ -21,5 +21,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path("",RedirectView.as_view(url="conferences/liste/")),
     path('conferences/',include("ConferenceApp.urls")),
-    path('user/',include("UserApp.urls"))
+    path('user/',include("UserApp.urls")),
+    path('api/',include("SessionAppApi.urls")),
+    path ('config/', include("securityConfigApp.urls"))
 ]

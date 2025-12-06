@@ -1,0 +1,435 @@
+Stratégie d'Examen Intelligente
+Pour gagner le maximum de points, concentrez-vous sur la bonne implémentation des contraintes et des fonctionnalités demandées.
+
+Structure et Organisation: Créez les modèles dans les bonnes applications (UserApp, ConferenceApp, SessionApp).
+
+Modèles (models.py):
+Héritage et Clé Primaire: Assurez-vous d'hériter de AbstractUser pour le modèle User et de définir la clé primaire correcte (user_id).
+
+Types de Champs: Utilisez les types de champs spécifiques (EmailField, TextField, DateField, TimeField, FileField, BooleanField).
+
+Choix (choices): Implémentez les listes de choix pour role (User), theme (Conference), status (Submission), et committee_role (OrganizingCommittee).
+
+Relations: Définissez correctement les relations (Many-to-One, Many-to-Many implicites) comme la liaison Session à Conference.
+Validateurs (models.py/forms.py):
+Utilisez les validateurs intégrés (RegexValidator, MinLengthValidator, FileExtensionValidator) lorsque c'est possible (ex: firstname, lastname, title, description, room, paper).
+Implémentez des fonctions de validation personnalisées (custom validators) pour la logique complexe (ex: email universitaire, session_day dans l'intervalle de la conférence, start_time/end_time).
+Utilisez la méthode clean() du modèle/formulaire pour les validations inter-champs ou complexes (ex: start_date vs end_date de la conférence, limite de soumissions par jour).
+Admin (admin.py):
+Personnalisation de Liste: Utilisez list_display, list_filter, search_fields.
+
+Fonctions Personnalisées: Implémentez les méthodes (ex: duration, short_abstract) pour l'affichage dans la liste.
+Formulaire d'Édition: Utilisez fieldsets pour organiser les champs, et readonly_fields pour bloquer certains attributs.
+
+Inlines: Ajoutez les inlines (StackedInline ou TabularInline) pour gérer les objets liés (ex: Submission dans l'admin de Conference).
+
+Actions: Ajoutez des actions personnalisées (ex: marquer comme payé, accepter).
+
+Vues (views.py):
+
+Vues Génériques: Utilisez les bonnes vues génériques (ListView, DetailView, CreateView, UpdateView) pour le CRUD.
+
+Mixins d'Autorisation: Utilisez LoginRequiredMixin pour les accès restreints.
+
+Logique d'Affichage/Modification: Gérez les conditions spécifiques (ex: soumission non modifiable si 'Accepted'/'Rejected' , rôle 'participant' par défaut à l'inscription )
+
+
+-------------------------VIEWS-------------------------------------------------------------------------
+-settings.py:
+# settings.py (extrait)
+
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [BASE_DIR / "templates"],  # <- ajouter ici si templates à la racine
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+-->Dans myproject/settings.py (ligne TEMPLATES) ajoute le dossier BASE_DIR / "templates" (ou le chemin vers ton dossier templates dans l’app).
+forms.py — ModelForm personnalisé (ConferenceForm)
+
+-Crée forms.py pour centraliser le formulaire (labels, placeholders, widgets)
+# forms.py
+
+from django import forms
+from .models import Conference
+
+class ConferenceForm(forms.ModelForm):
+    class Meta:
+        model = Conference
+        fields = ['name', 'theme', 'location', 'start_date', 'end_date', 'description']
+        labels = {
+            'name': 'Nom de la conférence',
+            'theme': 'Thème',
+            'location': 'Lieu',
+            'start_date': 'Date de début',
+            'end_date': 'Date de fin',
+            'description': 'Description',
+        }
+        widgets = {
+            'start_date': forms.DateInput(attrs={'type': 'date', 'placeholder': 'YYYY-MM-DD'}),
+            'end_date': forms.DateInput(attrs={'type': 'date', 'placeholder': 'YYYY-MM-DD'}),
+            'name': forms.TextInput(attrs={'placeholder': 'Titre de la conférence'}),
+            'theme': forms.TextInput(attrs={'placeholder': 'Ex: IA, Data Science...'}),
+            'location': forms.TextInput(attrs={'placeholder': 'Ville, salle...'}),
+            'description': forms.Textarea(attrs={'rows':4, 'placeholder': 'Décrire la conférence'}),
+        }
+    (pas obligatoire )
+    def clean(self):
+        cleaned = super().clean()
+        sd = cleaned.get('start_date')
+        ed = cleaned.get('end_date')
+        if sd and ed and ed < sd:
+            raise forms.ValidationError("La date de fin doit être après la date de début.")
+        return cleaned*
+
+-views.py — explication et code pour chaque vue CRUD
+# views.py (début)
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse_lazy
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from .models import Conference
+from .forms import ConferenceForm
+
+-simple et explicite : Conference.objects.all() récupère toutes les lignes, order_by('start_date') trie par date croissante (du plus ancien au plus récent). (Si tu veux du plus récent au plus ancien, mettre -start_date.)
+
+def list_conferences_fn(request):
+    # QuerySet: on prend toutes les conférences triées par date de début (asc)
+    conferences = Conference.objects.all().order_by('start_date')
+    return render(request, 'conference/list_conferences.html', {'conferences': conferences})
+
+-option B : vue générique ListView (recommandée)
+
+class ListConferences(ListView):
+    model = Conference
+    template_name = 'conference/list_conferences.html'
+    context_object_name = 'conferences'
+    ordering = ['start_date']  # tri par start_date croissant
+    paginate_by = 10  # optionnel : pagination
+class DetailConference(DetailView):
+    model = Conference
+    template_name = 'conference/detail_conference.html'
+    context_object_name = 'conference'
+
+-AddConference — créer une nouvelle conférence
+
+class AddConference(CreateView):
+    model = Conference
+    form_class = ConferenceForm
+    template_name = 'conference/form_conference.html'
+    success_url = reverse_lazy('list_conferences')
+
+-updateconference 
+
+class UpdateConference(UpdateView):
+    model = Conference
+    form_class = ConferenceForm
+    template_name = 'conference/form_conference.html'
+    success_url = reverse_lazy('list_conferences')
+
+-delete conference ;
+
+class DeleteConference(DeleteView):
+    model = Conference
+    template_name = 'conference/confirm_delete_conference.html'
+    success_url = reverse_lazy('list_conferences')
+
+-urls.py (de l’app) — routes Crée/édite myapp/urls.py :
+# myapp/urls.py
+
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    # Liste : on peut utiliser la CBV ou la fonction
+    path('conferences/', views.ListConferences.as_view(), name='list_conferences'),
+    # Détail : pk identifie l'objet
+    path('conference/<int:pk>/', views.DetailConference.as_view(), name='detail_conference'),
+    # Ajouter
+    path('conference/add/', views.AddConference.as_view(), name='add_conference'),
+    # Modifier
+    path('conference/update/<int:pk>/', views.UpdateConference.as_view(), name='update_conference'),
+    # Supprimer
+    path('conference/delete/<int:pk>/', views.DeleteConference.as_view(), name='delete_conference'),
+]
+
+-Ensuite, dans myproject/urls.py, inclure ces routes :
+# myproject/urls.py
+
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('', include('myapp.urls')),
+]
+
+-Templates HTML 
+-templates/conference/list_conferences.html
+
+<!-- list_conferences.html -->
+{% extends "base.html" %}
+{% block content %}
+<h2>Liste des conférences</h2>
+<a class="btn btn-success mb-2" href="{% url 'add_conference' %}">Ajouter une conférence</a>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Nom</th>
+      <th>Thème</th>
+      <th>Lieu</th>
+      <th>Date début</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for conference in conferences %}
+    <tr>
+      <td>{{ conference.name }}</td>
+      <td>{{ conference.theme }}</td>
+      <td>{{ conference.location }}</td>
+      <td>{{ conference.start_date }}</td>
+      <td>
+        <a class="btn btn-info btn-sm" href="{% url 'detail_conference' conference.pk %}">Détails</a>
+        <a class="btn btn-warning btn-sm" href="{% url 'update_conference' conference.pk %}">Modifier</a>
+        <a class="btn btn-danger btn-sm" href="{% url 'delete_conference' conference.pk %}">Supprimer</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5">Aucune conférence.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+
+-templates/conference/detail_conference.html
+
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ conference.name }}</h2>
+<p><strong>Thème:</strong> {{ conference.theme }}</p>
+<p><strong>Lieu:</strong> {{ conference.location }}</p>
+<p><strong>Début:</strong> {{ conference.start_date }}</p>
+<p><strong>Fin:</strong> {{ conference.end_date }}</p>
+<p><strong>Description:</strong> {{ conference.description }}</p>
+<a class="btn btn-secondary" href="{% url 'list_conferences' %}">Retour</a>
+{% endblock %}
+
+-templates/conference/form_conference.html:
+
+{% extends "base.html" %}
+{% block content %}
+<h2>{% if object %}Modifier la conférence{% else %}Ajouter une conférence{% endif %}</h2>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit" class="btn btn-primary">{% if object %}Enregistrer{% else %}Ajouter{% endif %}</button>
+  <a class="btn btn-secondary" href="{% url 'list_conferences' %}">Annuler</a>
+</form>
+{% endblock %}
+
+-templates/conference/confirm_delete_conference.html:
+
+{% extends "base.html" %}
+{% block content %}
+<h2>Supprimer la conférence ?</h2>
+<p>Voulez-vous vraiment supprimer "<strong>{{ conference.name }}</strong>" ?</p>
+<form method="post">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-danger">Confirmer la suppression</button>
+  <a class="btn btn-secondary" href="{% url 'list_conferences' %}">Annuler</a>
+</form>
+{% endblock %}
+
+
+-FORMS : formulaire d’inscription sans le champ role
+
+Dans forms.py :
+
+from django.contrib.auth.forms import UserCreationForm
+from .models import User
+
+class RegisterForm(UserCreationForm):
+    class Meta:
+        model = User
+        fields = ["username", "email"]  # PAS DE ROLE!!
+
+-VIEWS : CreateView pour créer un compte
+from django.views.generic import CreateView
+from django.urls import reverse_lazy
+from .forms import RegisterForm
+from .models import User
+
+class RegisterView(CreateView):
+    model = User
+    form_class = RegisterForm
+    template_name = "register.html"
+    success_url = reverse_lazy("login")
+
+    def form_valid(self, form):
+        user = form.save(commit=False)
+        user.role = "participant"   # impose le rôle
+        user.save()
+        return super().form_valid(form)
+
+-urls
+from django.urls import path
+from .views import RegisterView
+from django.contrib.auth import views as auth_views
+
+urlpatterns = [
+    path("register/", RegisterView.as_view(), name="register"),
+    path("login/", auth_views.LoginView.as_view(template_name="login.html"), name="login"),
+    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+]
+
+-– Template register.html
+
+Dans templates/register.html :
+
+<h2>Create Account</h2>
+
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Register</button>
+</form>
+
+-Barre de navigation (navbar)
+FICHIERS : templates/base.html
+
+Crée un fichier : templates/base.html
+<nav>
+    <a href="/">Accueil</a>
+
+    {% if user.is_authenticated %}
+        <a href="{% url 'list_submissions' %}">Mes Soumissions</a>
+        <a href="{% url 'logout' %}">Logout</a>
+        <span>Bonjour {{ user.username }}</span>
+    {% else %}
+        <a href="{% url 'login' %}">Login</a>
+        <a href="{% url 'register' %}">Register</a>
+    {% endif %}
+</nav>
+
+{% block content %}{% endblock %}
+
+-Limiter l’accès aux pages conférences
+DANS VIEWS..PY 
+from django.core.exceptions import PermissionDenied
+
+class CommitteeRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or request.user.role != "committee":
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+-VIEW : ListView
+from django.views.generic import ListView
+from .models import Submission
+
+class ListSubmissionsView(LoginRequiredMixin, ListView):
+    model = Submission
+    template_name = "list_submissions.html"
+    context_object_name = "submissions"
+
+    def get_queryset(self):
+        return Submission.objects.filter(user=self.request.user)
+-URL 
+path("submissions/", ListSubmissionsView.as_view(), name="list_submissions"),
+
+-list_submissions.html :
+<h2>Mes Soumissions</h2>
+
+<table>
+    <tr>
+        <th>Titre</th>
+        <th>Status</th>
+        <th>Auteur</th>
+        <th>Conférence</th>
+        <th>Date</th>
+        <th>Paiement</th>
+        <th></th>
+    </tr>
+
+    {% for s in submissions %}
+    <tr>
+        <td>{{ s.title }}</td>
+        <td>{{ s.status }}</td>
+        <td>{{ s.user.username }}</td>
+        <td>{{ s.conference.name }}</td>
+        <td>{{ s.submission_date }}</td>
+        <td>{{ s.is_paid }}</td>
+        <td><a href="{% url 'detail_submission' s.pk %}">Détails</a></td>
+    </tr>
+    {% endfor %}
+</table>
+
+-DetailSubmission
+
+class DetailSubmissionView(LoginRequiredMixin, DetailView):
+    model = Submission
+    template_name = "detail_submission.html"
+
+-detail_submission.html
+
+<h2>{{ submission.title }}</h2>
+
+<p>{{ submission.abstract }}</p>
+<p>{{ submission.keywords }}</p>
+<a href="{{ submission.paper.url }}">Télécharger PDF</a>
+
+-AddSubmission
+class AddSubmissionView(LoginRequiredMixin, CreateView):
+    model = Submission
+    fields = ["title", "abstract", "keywords", "paper", "conference"]
+    template_name = "add_submission.html"
+    success_url = reverse_lazy("list_submissions")
+
+    def form_valid(self, form):
+        form.instance.user = self.request.user
+        return super().form_valid(form)
+
+-UpdateSubmission
+class UpdateSubmissionView(LoginRequiredMixin, UpdateView):
+    model = Submission
+    fields = ["title", "abstract", "keywords", "paper"]
+    template_name = "update_submission.html"
+    success_url = reverse_lazy("list_submissions")
+
+    def dispatch(self, request, *args, **kwargs):
+        submission = self.get_object()
+        if submission.status in ["Accepted", "Rejected"]:
+            return HttpResponseForbidden("Cette soumission ne peut pas être modifiée")
+        return super().dispatch(request, *args, **kwargs)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
